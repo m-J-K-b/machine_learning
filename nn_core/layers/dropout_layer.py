@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.typing import NDArray
 
 from nn_core.layers.layer import Layer
 
@@ -14,7 +15,7 @@ class DropoutLayer(Layer):
         self.drop_prob = drop_prob
         self.mask = None
 
-    def forward(self, x: np.ndarray, training: bool) -> np.ndarray:
+    def forward(self, x: NDArray, training: bool) -> NDArray:
         if training:
             self.mask = (np.random.rand(*x.shape) > self.drop_prob).astype(float)
             y = x * self.mask
@@ -24,7 +25,7 @@ class DropoutLayer(Layer):
         else:
             return x
 
-    def backward(self, grad: np.ndarray, lr: float) -> np.ndarray:
+    def backward(self, grad: NDArray, lr: float) -> NDArray:
         """
         Backpropagation for dropout.
 

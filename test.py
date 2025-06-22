@@ -3,7 +3,6 @@ import pickle
 import numpy as np
 import pygame as pg
 
-import log_util
 from util import compute_accuracy, load_mnist_dataset
 
 
@@ -23,7 +22,6 @@ def main():
     font = pg.font.SysFont("Arial", 20)
 
     ### drawing canvas setup
-    drawing_brush = 
     drawing_surf = pg.Surface((28, 28))
     drawing_surf.fill((0, 0, 0))
     drawing_rect = drawing_surf.get_rect()
@@ -35,7 +33,7 @@ def main():
     menu_surf = pg.Surface((400, 600))
     menu_rect = menu_surf.get_rect(topleft=(600, 0))
 
-    predictions = None
+    predictions = []
 
     def _predict_button_callback():
         nonlocal predictions
@@ -195,7 +193,9 @@ def main():
         menu_surf.blit(random_img_button_text, random_img_button_text_rect)
 
         y = random_img_button_rect.bottom + 20
-        for i, p in sorted(zip(range(10), predictions), key=lambda x: x[1], reverse=True):
+        for i, p in sorted(
+            zip(range(10), predictions), key=lambda x: x[1], reverse=True
+        ):
             text = font.render(f"{i}: {p:.3f}", True, (255, 255, 255))
             menu_surf.blit(text, (20, y))
             y += text.get_height()
@@ -214,7 +214,11 @@ def main():
             width=p,
         )
         screen.blit(scaled_drawing_surf, scaled_drawing_rect)
-        if img_label is not None:
+        if (
+            img_label is not None
+            and img_label_text is not None
+            and img_label_rect is not None
+        ):
             screen.blit(img_label_text, img_label_rect)
 
         pg.display.flip()

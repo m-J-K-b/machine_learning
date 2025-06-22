@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.typing import NDArray
 
 from nn_core.layers.layer import Layer
 
@@ -18,15 +19,15 @@ class DenseLayer(Layer):
 
         self.bias = np.zeros((output_size))
 
-    def forward(self, x: np.ndarray, training: bool) -> np.ndarray:
+    def forward(self, x: NDArray, training: bool) -> NDArray:
         """
         Perform forward propagation through the layer.
 
         Args:
-            x (np.ndarray): Input data of shape (batch_size, input_size).
+            x (NDArray): Input data of shape (batch_size, input_size).
 
         Returns:
-            np.ndarray: Output data of shape (batch_size, output_size) after applying the linear transformation.
+            NDArray: Output data of shape (batch_size, output_size) after applying the linear transformation.
         """
         y = (
             x @ self.weights.T + self.bias
@@ -36,17 +37,17 @@ class DenseLayer(Layer):
             self._y = y
         return y
 
-    def backward(self, grad: np.ndarray, lr: float) -> np.ndarray:
+    def backward(self, grad: NDArray, lr: float) -> NDArray:
         """
         Perform backward propagation and update the layer's weights and biases.
 
         Args:
-            grad (np.ndarray): Gradient of the loss with respect to the output of this layer,
+            grad (NDArray): Gradient of the loss with respect to the output of this layer,
                                shape (batch_size, output_size).
             lr (float): Learning rate for weight and bias updates.
 
         Returns:
-            np.ndarray: Gradient of the loss with respect to the input of this layer,
+            NDArray: Gradient of the loss with respect to the input of this layer,
                         shape (batch_size, input_size).
         """
         input_grad = (
@@ -60,10 +61,3 @@ class DenseLayer(Layer):
         self.bias -= np.sum(grad, axis=0) * lr  # Sum over batch, shape (outputs,)
 
         return input_grad
-
-    def to_dict(self):
-        return {
-            "type": "DenseLayer",
-            "weights": self.weights.tolist(),
-            "biases": self.bias.tolist(),
-        }

@@ -136,22 +136,18 @@ def stochastic_gd(decay_rate=0.95, min_lr=1e-9):
         initial_lr = lr
 
         for epoch in range(epochs):
-            # Decay learning rate
             lr = max(initial_lr * (decay_rate**epoch), min_lr)
 
-            # Shuffle the dataset properly
             indices = np.random.permutation(n_samples)
             loss_epoch = 0
 
-            # Stochastic updates
             for idx in indices:
                 x_sample = x[idx : idx + 1]
                 y_sample = y[idx : idx + 1]
                 y_hat = nn.forward(x_sample)
                 nn.backward(y_sample, y_hat, lr)
-                loss_epoch += nn.loss.f(y_sample, y_hat)  # accumulate loss
+                loss_epoch += nn.loss.f(y_sample, y_hat)
 
-            # Average loss for this epoch
             loss_epoch /= n_samples
             progress.next_epoch(loss_epoch)
 

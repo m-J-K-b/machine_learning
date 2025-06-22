@@ -2,11 +2,10 @@ import copy
 import pickle
 import time
 
+import log_util
 import numpy as np
 from matplotlib import pyplot as plt
-from tqdm import tqdm  # optional, for nicer progress bars
 
-import log_util
 from nn_core import (
     ActivationLayer,
     BatchNormalizationLayer,
