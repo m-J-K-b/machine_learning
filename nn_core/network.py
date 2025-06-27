@@ -4,7 +4,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from nn_core.layers import Layer
-from nn_core.loss import MSE, Loss
+from nn_core.loss import Loss
 
 
 class Network:
@@ -18,7 +18,7 @@ class Network:
     def set_loss(self, loss: Loss):
         self.loss = loss
 
-    def forward(self, input_data: NDArray, training: bool = True):
+    def forward(self, input_data: NDArray, training: bool = False):
         """
         Perform forward propagation through all layers of the network.
 
@@ -29,23 +29,24 @@ class Network:
             NDArray: Output data after passing through all layers.
                         Shape: (batch_size, output_features)
         """
-        y_hat = input_data
+        y = input_data
         for layer in self.layers:
-            y_hat = layer.forward(y_hat, training)
-        return y_hat
+            y = layer.forward(y, training)
+        return y
 
-    def backward(self, y: NDArray, y_hat: NDArray, lr: float):
+    def backward(self, y: NDArray, y_pred: NDArray, lr: float):
         """
         Perform backward propagation through all layers of the network.
 
         Args:
             y (NDArray): Ground truth targets. Shape: (batch_size, output_features)
-            y_hat (NDArray): Predicted outputs from the network. Shape: (batch_size, output_features)
+            y_pred (NDArray): Predicted outputs from the network. Shape: (batch_size, output_features)
             lr (float): Learning rate for updating layer parameters.
         """
         if self.loss is None:
             raise RuntimeError(f"Loss function was not set on network")
 
-        grad = self.loss.d(y, y_hat)
+        grad = self.loss.d(y, y_pred)
         for layer in reversed(self.layers):
+            np.clip(grad, -1.0, 1.0, out=grad)
             grad = layer.backward(grad, lr)

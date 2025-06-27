@@ -3,16 +3,20 @@ import pickle
 import numpy as np
 import pygame as pg
 
+from nn_core.loss import CrossEntropyLoss
 from util import compute_accuracy, load_mnist_dataset
 
 
 def main():
     ### load trained model
-    with open("mnist_mlp.pkl", "rb") as f:
+    model_path = "bert.pkl"
+    with open(model_path, "rb") as f:
         nn = pickle.load(f)
 
     ### load dataset
     x_train, y_train, x_test, y_test = load_mnist_dataset()
+
+    final_accuracy = compute_accuracy(y_test, nn.forward(x_test))
 
     ### pygame setup
     pg.init()
@@ -20,6 +24,9 @@ def main():
     screen = pg.display.set_mode(RES)
     clock = pg.time.Clock()
     font = pg.font.SysFont("Arial", 20)
+    pg.display.set_caption(
+        f"using: {model_path} with a final accuracy of: {final_accuracy}"
+    )
 
     ### drawing canvas setup
     drawing_surf = pg.Surface((28, 28))
@@ -34,26 +41,27 @@ def main():
     menu_rect = menu_surf.get_rect(topleft=(600, 0))
 
     predictions = []
+    predicted_digit = None
+    label_color = (255, 255, 255)  # white by default
 
     def _predict_button_callback():
-        nonlocal predictions
-        # drawing_surf24 = drawing_surf.convert(24)
+        nonlocal predictions, predicted_digit
 
-        # rgb = pg.surfarray.array3d(drawing_surf24)
+        drawing_surf24 = drawing_surf.convert(24)
+        rgb = pg.surfarray.array3d(drawing_surf24)
+        gray = np.mean(rgb, axis=-1)
+        gray = gray.astype(np.float32) / 255.0
+        x = gray.T.reshape(1, -1)
 
-        # gray = np.mean(rgb, axis=-1)
-        # gray = gray.astype(np.float32) / 255.0
+        all_probs = CrossEntropyLoss.softmax(nn.forward(x, training=False))
+        predictions = list(all_probs.mean(axis=0) * 100)
+        predicted_digit = int(np.argmax(predictions))
 
-        # x = gray.reshape(1, -1)
-
-        # batch = np.repeat(x, 16, axis=0)  # for faulty batch normalization
-        # all_probs = nn.forward(batch, training=False)
-        # predictions = list(all_probs.mean(axis=0))
-        predictions = np.random.random(10)
-        predictions /= np.sum(predictions)
+        if img_label is not None:
+            true_label = int(img_label.split(":")[1].strip())
+            _update_img_label(true_label, predicted_digit)
 
     ### Buttons
-    # predict button
     predict_button_rect = pg.Rect((20, 20, 170, 50))
     predict_button_text = font.render("Predict", True, (255, 255, 255))
     predict_button_text_rect = predict_button_text.get_rect()
@@ -68,7 +76,6 @@ def main():
     predict_button_hovered = False
     predict_button_callback = _predict_button_callback
 
-    # clear button
     def _clear_button_callback():
         _reset_img_label()
         drawing_surf.fill((0, 0, 0))
@@ -85,19 +92,28 @@ def main():
     clear_button_hovered = False
     clear_button_callback = _clear_button_callback
 
-    def _update_img_label(new_label):
-        nonlocal img_label, img_label_text, img_label_rect
+    def _update_img_label(new_label, predicted=None):
+        nonlocal img_label, img_label_text, img_label_rect, label_color
+
         img_label = f"label: {new_label}"
-        img_label_text = font.render(img_label, True, (255, 255, 255))
+        if predicted is None:
+            label_color = (255, 255, 255)  # white
+        elif predicted == new_label:
+            label_color = (0, 255, 0)  # green
+        else:
+            label_color = (255, 0, 0)  # red
+
+        img_label_text = font.render(img_label, True, label_color)
         img_label_rect = img_label_text.get_rect()
         img_label_rect.x = scaled_drawing_rect.x
         img_label_rect.y = scaled_drawing_rect.y - img_label_rect.h - 5
 
     def _reset_img_label():
-        nonlocal img_label, img_label_text, img_label_rect
+        nonlocal img_label, img_label_text, img_label_rect, label_color
         img_label = None
         img_label_text = None
         img_label_rect = None
+        label_color = (255, 255, 255)
 
     img_label = None
     img_label_text = None
@@ -106,12 +122,14 @@ def main():
     def _random_img_button_callback():
         nonlocal img_label
         idx = np.random.randint(len(x_test))
-        _update_img_label(np.argmax(y_test[idx]))
-        img = x_test[idx].reshape(28, 28)
+        true_label = int(np.argmax(y_test[idx]))
+        img = x_test[idx].reshape(28, 28).T
         gray = (img * 255).astype(np.uint8)
         rgb = np.stack([gray] * 3, axis=2)
         pg.surfarray.blit_array(drawing_surf, rgb)
+
         _predict_button_callback()
+        _update_img_label(true_label, predicted_digit)
 
     random_img_button_rect = pg.Rect((20, predict_button_rect.bottom + 20, 360, 50))
     random_img_button_text = font.render("random img", True, (255, 255, 255))
@@ -201,6 +219,7 @@ def main():
             y += text.get_height()
 
         screen.blit(menu_surf, menu_rect)
+
         p = 4
         pg.draw.rect(
             screen,
@@ -213,7 +232,9 @@ def main():
             ),
             width=p,
         )
+
         screen.blit(scaled_drawing_surf, scaled_drawing_rect)
+
         if (
             img_label is not None
             and img_label_text is not None

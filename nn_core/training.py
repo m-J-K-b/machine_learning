@@ -1,16 +1,14 @@
 import threading
 import time
+from typing import Callable
 
 import numpy as np
+from numpy.typing import NDArray
 
 from nn_core.network import Network
 
 
 class Progress:
-    """
-    Tracks progress, timing and loss during training.
-    """
-
     def __init__(self, nn: Network, epochs: int):
         self.nn: Network = nn
         self.total_epochs = epochs
@@ -57,47 +55,20 @@ class Progress:
 
 
 def run_in_thread(target_fn, *args, **kwargs):
-    """
-    Runs a target function in a daemon thread.
-    """
     t = threading.Thread(target=target_fn, args=args, kwargs=kwargs, daemon=True)
     t.start()
     return t
 
 
-def train(nn: Network, x, y, epochs, lr, method_fn):
-    """
-    Trains the network using the provided method in a background thread.
-
-    Returns:
-        Progress: Progress tracker object.
-    """
-    progress = Progress(nn, epochs)
-
-    def _train():
-        progress.start()
-        method_fn(nn, x, y, epochs, lr, progress)
-        progress.stop()
-
-    run_in_thread(_train)
-    return progress
+TrainingMethod = Callable[[Network, NDArray, NDArray, int, float, Progress], None]
 
 
-def mini_batch_gd(mini_batch_size, decay_rate=0.95, min_lr=1e-9):
-    """
-    Mini-batch Gradient Descent with optional learning rate decay.
-
-    Args:
-        mini_batch_size (int): Size of each mini-batch.
-        decay_rate (float): Learning rate decay factor per epoch (default 0.95).
-
-    Returns:
-        function: Training function.
-    """
-
-    def _mini_batch_gd(nn, x, y, epochs, lr, progress):
+def mini_batch_gd(mini_batch_size, decay_rate=0.95, min_lr=1e-9) -> TrainingMethod:
+    def _mini_batch_gd(
+        nn: Network, x: NDArray, y: NDArray, epochs: int, lr: float, progress: Progress
+    ):
         n_samples = x.shape[0]
-        initial_lr = lr  # Store initial learning rate
+        initial_lr = lr
 
         for epoch in range(epochs):
             lr = max(min_lr, initial_lr * (decay_rate**epoch))
@@ -106,12 +77,12 @@ def mini_batch_gd(mini_batch_size, decay_rate=0.95, min_lr=1e-9):
             loss_epoch = 0
 
             for i in range(0, n_samples, mini_batch_size):
-                idx = indices[i]
-                x_sample = x[idx : idx + mini_batch_size]
-                y_sample = y[idx : idx + mini_batch_size]
-                y_hat = nn.forward(x_sample)
-                nn.backward(y_sample, y_hat, lr)
-                loss_epoch += nn.loss.f(y_sample, y_hat)
+                idx = indices[i : i + mini_batch_size]
+                x_sample = x[idx]
+                y_sample = y[idx]
+                y_pred = nn.forward(x_sample, training=True)
+                nn.backward(y_sample, y_pred, lr)
+                loss_epoch += nn.loss.f(y_sample, y_pred)
 
             loss_epoch /= n_samples
             progress.next_epoch(loss_epoch)
@@ -119,18 +90,7 @@ def mini_batch_gd(mini_batch_size, decay_rate=0.95, min_lr=1e-9):
     return _mini_batch_gd
 
 
-def stochastic_gd(decay_rate=0.95, min_lr=1e-9):
-    """
-    Stochastic Gradient Descent with learning rate decay and minimal learning rate.
-
-    Args:
-        decay_rate (float): Learning rate decay per epoch.
-        min_lr (float): Minimum allowed learning rate to prevent vanishing updates.
-
-    Returns:
-        function: Training function.
-    """
-
+def stochastic_gd(decay_rate=0.95, min_lr=1e-9) -> TrainingMethod:
     def _stochastic_gd(nn: Network, x, y, epochs, lr, progress: Progress):
         n_samples = x.shape[0]
         initial_lr = lr
@@ -144,9 +104,9 @@ def stochastic_gd(decay_rate=0.95, min_lr=1e-9):
             for idx in indices:
                 x_sample = x[idx : idx + 1]
                 y_sample = y[idx : idx + 1]
-                y_hat = nn.forward(x_sample)
-                nn.backward(y_sample, y_hat, lr)
-                loss_epoch += nn.loss.f(y_sample, y_hat)
+                y_pred = nn.forward(x_sample, training=True)
+                nn.backward(y_sample, y_pred, lr)
+                loss_epoch += nn.loss.f(y_sample, y_pred)
 
             loss_epoch /= n_samples
             progress.next_epoch(loss_epoch)
@@ -154,17 +114,19 @@ def stochastic_gd(decay_rate=0.95, min_lr=1e-9):
     return _stochastic_gd
 
 
-def full_batch_gd():
-    def _full_batch_gd(nn: Network, x, y, epochs, lr, progress: Progress):
+def full_batch_gd() -> TrainingMethod:
+    def _full_batch_gd(
+        nn: Network, x: NDArray, y: NDArray, epochs: int, lr: float, progress: Progress
+    ):
         for _ in range(epochs):
-            y_hat = nn.forward(x)
-            nn.backward(y, y_hat, lr)
+            y_pred = nn.forward(x, training=True)
+            nn.backward(y, y_pred, lr)
             progress.next_epoch()
 
     return _full_batch_gd
 
 
-def full_batch_random_gd():
+def full_batch_random_gd() -> TrainingMethod:
     def _full_batch_random_gd(nn: Network, x, y, epochs, lr, progress: Progress):
         n_samples = x.shape[0]
         for _ in range(epochs):
@@ -172,8 +134,27 @@ def full_batch_random_gd():
             np.random.shuffle(indices)
             x_shuffled = x[indices]
             y_shuffled = y[indices]
-            y_hat = nn.forward(x_shuffled)
-            nn.backward(y_shuffled, y_hat, lr)
+            y_pred = nn.forward(x_shuffled, training=True)
+            nn.backward(y_shuffled, y_pred, lr)
             progress.next_epoch()
 
     return _full_batch_random_gd
+
+
+def train(
+    nn: Network,
+    x: NDArray,
+    y: NDArray,
+    epochs: int,
+    lr: float,
+    method_fn: TrainingMethod,
+):
+    progress = Progress(nn, epochs)
+
+    def _train():
+        progress.start()
+        method_fn(nn, x, y, epochs, lr, progress)
+        progress.stop()
+
+    run_in_thread(_train)
+    return progress

@@ -6,12 +6,8 @@ from nn_core.layers.layer import Layer
 
 class DropoutLayer(Layer):
     def __init__(self, drop_prob: float = 0.5):
-        """
-        Dropout Layer.
+        super().__init__()
 
-        Args:
-            drop_prob (float): Probability of dropping a neuron (0.0 - 1.0).
-        """
         self.drop_prob = drop_prob
         self.mask = None
 
@@ -22,18 +18,7 @@ class DropoutLayer(Layer):
             self._x = x
             self._y = y
             return y
-        else:
-            return x
+        return x
 
     def backward(self, grad: NDArray, lr: float) -> NDArray:
-        """
-        Backpropagation for dropout.
-
-        Args:
-            grad: Gradient from the next layer.
-            lr: Learning rate (unused for dropout).
-
-        Returns:
-            Gradient to propagate backward.
-        """
         return grad * self.mask  # Pass gradient only where neuron was not dropped
