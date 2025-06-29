@@ -62,11 +62,25 @@ class Sigmoid(Activation):
         return sig * (1 - sig)
 
 
-# class Softmax(Activation): # TODO: Needs Fixing!
-#     def f(self, x: NDArray) -> NDArray:
-#         exp = np.exp(x - np.max(x, axis=1, keepdims=True))
-#         return exp / np.sum(exp, axis=1, keepdims=True)
+class Softmax(Activation):
+    def f(self, x: NDArray) -> NDArray:
+        exps = np.exp(x - np.max(x, axis=1, keepdims=True))
+        self.out = exps / np.sum(exps, axis=1, keepdims=True)
+        return self.out
 
-#     def d(self, x: NDArray) -> NDArray:
-#         # Not used directly unless explicitly computing full Jacobian
-#         return np.ones_like(x)
+    def d(
+        self, grad_output: NDArray
+    ) -> NDArray:  # TODO: Fix so that this works with cross entropy
+        """
+        Compute the gradient of the loss w.r.t. the input of the softmax layer.
+        This handles the Jacobian vector product: grad_output @ J(softmax)
+        """
+        batch_size, num_classes = self.out.shape
+        grad_input = np.zeros_like(grad_output)
+
+        for i in range(batch_size):
+            s = self.out[i].reshape(-1, 1)  # (num_classes, 1)
+            jacobian = np.diagflat(s) - s @ s.T  # (num_classes, num_classes)
+            grad_input[i] = jacobian @ grad_output[i]  # Apply chain rule
+
+        return grad_input

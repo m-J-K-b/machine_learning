@@ -44,33 +44,20 @@ class MSE(Loss):
 
 # TODO: design choice leave softmax in or make it seperate
 class CrossEntropyLoss(Loss):
+    def __init__(self, apply_softmax=True):
+        self._apply_softmax = apply_softmax
+
     @classmethod
-    def softmax(cls, logits: NDArray) -> NDArray:
-        exps = np.exp(logits - np.max(logits, axis=1, keepdims=True))
+    def softmax(cls, y_pred: NDArray) -> NDArray:
+        exps = np.exp(y_pred - np.max(y_pred, axis=1, keepdims=True))
         return exps / np.sum(exps, axis=1, keepdims=True)
 
-    def f(self, y: NDArray, logits: NDArray) -> float:
-        """
-        Cross-entropy loss with softmax.
-        Args:
-            y: One-hot encoded true labels. Shape: (batch_size, num_classes)
-            logits: Raw model outputs (pre-softmax). Shape: (batch_size, num_classes)
-        Returns:
-            Scalar loss value
-        """
-        probs = self.softmax(logits)
+    def f(self, y: NDArray, y_pred: NDArray) -> float:
+        if self._apply_softmax:
+            y_pred = self.softmax(y_pred)
         epsilon = 1e-12
-        probs = np.clip(probs, epsilon, 1.0 - epsilon)
-        return -np.mean(np.sum(y * np.log(probs), axis=1))
+        y_pred = np.clip(y_pred, epsilon, 1.0 - epsilon)
+        return -np.mean(np.sum(y * np.log(y_pred), axis=1))
 
-    def d(self, y: NDArray, logits: NDArray) -> NDArray:
-        """
-        Gradient of cross-entropy with softmax.
-        Args:
-            y: One-hot encoded true labels. Shape: (batch_size, num_classes)
-            logits: Raw model outputs (pre-softmax). Shape: (batch_size, num_classes)
-        Returns:
-            Gradient of loss w.r.t. logits. Same shape as input.
-        """
-        probs = self.softmax(logits)
-        return (probs - y) / y.shape[0]
+    def d(self, y: NDArray, y_pred: NDArray) -> NDArray:
+        return (self.softmax(y_pred) - y) / y.shape[0]
