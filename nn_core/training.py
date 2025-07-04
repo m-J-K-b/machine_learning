@@ -1,26 +1,23 @@
 import threading
 import time
-from typing import Callable
+from typing import Callable, Optional
 
 import numpy as np
 from numpy.typing import NDArray
 
 from nn_core.network import Network
+from nn_core.optimizer.optimizer import Optimizer
 
 
 class Progress:
-    def __init__(self, nn: Network, epochs: int):
-        self.nn: Network = nn
+    def __init__(self, epochs: int):
         self.total_epochs = epochs
         self.current_epoch = 0
-        self.loss_history = []
         self.start_time = 0
         self.end_time = 0
 
-    def next_epoch(self, loss=None):
+    def next_epoch(self):
         self.current_epoch += 1
-        if loss is not None:
-            self.loss_history.append(loss)
 
     def set_epoch(self, epoch: int):
         self.current_epoch = epoch
@@ -60,85 +57,34 @@ def run_in_thread(target_fn, *args, **kwargs):
     return t
 
 
-TrainingMethod = Callable[[Network, NDArray, NDArray, int, float, Progress], None]
+TrainingMethod = Callable[[Network, NDArray, NDArray, int, Optimizer, Progress], None]
 
 
-def mini_batch_gd(mini_batch_size, decay_rate=0.95, min_lr=1e-9) -> TrainingMethod:
+def mini_batch_gd(
+    batch_size: int,
+) -> TrainingMethod:
     def _mini_batch_gd(
-        nn: Network, x: NDArray, y: NDArray, epochs: int, lr: float, progress: Progress
+        nn: Network,
+        x: NDArray,
+        y: NDArray,
+        epochs: int,
+        optimizer: Optimizer,
+        progress: Progress,
     ):
         n_samples = x.shape[0]
-        initial_lr = lr
 
-        for epoch in range(epochs):
-            lr = max(min_lr, initial_lr * (decay_rate**epoch))
-
+        for _ in range(epochs):
+            progress.next_epoch()
             indices = np.random.permutation(n_samples)
-            loss_epoch = 0
 
-            for i in range(0, n_samples, mini_batch_size):
-                idx = indices[i : i + mini_batch_size]
+            for i in range(0, n_samples, batch_size):
+                idx = indices[i : i + batch_size]
                 x_sample = x[idx]
                 y_sample = y[idx]
                 y_pred = nn.forward(x_sample, training=True)
-                nn.backward(y_sample, y_pred, lr)
-                loss_epoch += nn.loss.f(y_sample, y_pred)
-
-            loss_epoch /= n_samples
-            progress.next_epoch(loss_epoch)
+                nn.backward(y_sample, y_pred, optimizer)
 
     return _mini_batch_gd
-
-
-def stochastic_gd(decay_rate=0.95, min_lr=1e-9) -> TrainingMethod:
-    def _stochastic_gd(nn: Network, x, y, epochs, lr, progress: Progress):
-        n_samples = x.shape[0]
-        initial_lr = lr
-
-        for epoch in range(epochs):
-            lr = max(initial_lr * (decay_rate**epoch), min_lr)
-
-            indices = np.random.permutation(n_samples)
-            loss_epoch = 0
-
-            for idx in indices:
-                x_sample = x[idx : idx + 1]
-                y_sample = y[idx : idx + 1]
-                y_pred = nn.forward(x_sample, training=True)
-                nn.backward(y_sample, y_pred, lr)
-                loss_epoch += nn.loss.f(y_sample, y_pred)
-
-            loss_epoch /= n_samples
-            progress.next_epoch(loss_epoch)
-
-    return _stochastic_gd
-
-
-def full_batch_gd() -> TrainingMethod:
-    def _full_batch_gd(
-        nn: Network, x: NDArray, y: NDArray, epochs: int, lr: float, progress: Progress
-    ):
-        for _ in range(epochs):
-            y_pred = nn.forward(x, training=True)
-            nn.backward(y, y_pred, lr)
-            progress.next_epoch()
-
-    return _full_batch_gd
-
-
-def full_batch_random_gd() -> TrainingMethod:
-    def _full_batch_random_gd(nn: Network, x, y, epochs, lr, progress: Progress):
-        n_samples = x.shape[0]
-        for _ in range(epochs):
-            indices = np.arange(n_samples)
-            np.random.shuffle(indices)
-            x_shuffled = x[indices]
-            y_shuffled = y[indices]
-            y_pred = nn.forward(x_shuffled, training=True)
-            nn.backward(y_shuffled, y_pred, lr)
-            progress.next_epoch()
-
-    return _full_batch_random_gd
 
 
 def train(
@@ -146,14 +92,15 @@ def train(
     x: NDArray,
     y: NDArray,
     epochs: int,
-    lr: float,
+    optimizer: Optimizer,
     method_fn: TrainingMethod,
+    progress: Optional[Progress] = None,
 ):
-    progress = Progress(nn, epochs)
+    progress = progress or Progress(epochs)
 
     def _train():
         progress.start()
-        method_fn(nn, x, y, epochs, lr, progress)
+        method_fn(nn, x, y, epochs, optimizer, progress)
         progress.stop()
 
     run_in_thread(_train)

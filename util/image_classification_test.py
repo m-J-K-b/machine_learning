@@ -12,6 +12,7 @@ import pygame as pg
 from numpy.typing import NDArray
 
 from nn_core import Network
+from nn_core.util import softmax
 
 
 def open_file_browser(filetypes=None):
@@ -205,7 +206,7 @@ class ClassificationDataset:
         Returns:
             NDArray | float: the input at index
         """
-        return self.x[idx]
+        return self.x[idx][None, :]
 
     def verify(self, y_pred: NDArray, idx: int) -> bool:
         return np.argmax(y_pred) == self.y[idx]
@@ -299,8 +300,7 @@ class Tester:
             return
         ds = self.datasets[0]["dataset"]
         x = ds.get_x_at_index(self.current_index)
-        logits = self.network.forward(x, training=False)
-        probs = self.network.loss.softmax(logits)
+        probs = self.network.predict_probabilities(x)
         self.prediction = probs[0] if probs.ndim > 1 else probs
         self.correct = ds.verify(self.prediction, self.current_index)
 
